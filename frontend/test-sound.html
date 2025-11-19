@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Som - Criador de Shorts</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(118, 75, 162, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .info {
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔊 Teste de Som de Notificação</h1>
+        <p>Clique no botão abaixo para ouvir o som que tocará quando a análise finalizar:</p>
+        <button onclick="playSound()">🎵 Testar Som de Análise Completa</button>
+        <div class="info">
+            <p>✨ Som gerado programaticamente (Web Audio API)</p>
+            <p>🎼 Acorde de Dó Maior (C5, E5, G5)</p>
+        </div>
+    </div>
+
+    <script>
+        function playSound() {
+            try {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                const audioContext = new AudioContextClass();
+                
+                // Configuração do som de sucesso
+                const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5 (acorde de C maior)
+                const durations = [0.1, 0.1, 0.15];
+                const volume = 0.4;
+                
+                let startTime = audioContext.currentTime;
+                
+                // Criar sequência de notas
+                frequencies.forEach((frequency, index) => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = frequency;
+                    
+                    // Envelope de volume
+                    const duration = durations[index];
+                    gainNode.gain.setValueAtTime(0, startTime);
+                    gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.01);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                    
+                    oscillator.start(startTime);
+                    oscillator.stop(startTime + duration);
+                    
+                    startTime += duration * 0.8;
+                });
+                
+                console.log('🔊 Som de notificação tocado!');
+            } catch (error) {
+                console.error('Erro ao tocar som:', error);
+                alert('Erro ao tocar som. Verifique o console.');
+            }
+        }
+    </script>
+</body>
+</html>

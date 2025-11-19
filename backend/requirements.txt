@@ -1,0 +1,22 @@
+# Web Framework
+Flask==3.0.0
+flask-cors==4.0.0
+
+# Video Processing
+yt-dlp
+moviepy
+ffmpeg-python
+
+# Audio Transcription (Otimizado)
+faster-whisper  # 2-3x mais rápido que openai-whisper
+# openai-whisper  # Fallback (caso faster-whisper não funcione)
+
+# AI/LLM
+ollama
+groq
+
+# Utilities
+python-dotenv==1.0.0
+requests
+Pillow
+numpy
