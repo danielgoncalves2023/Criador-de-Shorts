@@ -8,10 +8,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads')
 
 app = Flask(__name__)
-CORS(app)  # Permite CORS para todas as rotas e origens
-
-# Configurações da aplicação (se houver)
-# app.config.from_object('src.config.config.Config')
+CORS(app)
 
 # Registra todas as rotas
 register_routes(app)
@@ -33,4 +30,8 @@ def uploads(filename):
     return send_from_directory(uploads_dir, filename)
 
 if __name__ == '__main__':
+    # Print all registered routes for debugging
+    print("\n[DEBUG] Rotas registradas no Flask:")
+    for rule in app.url_map.iter_rules():
+        print(f"[ROUTE] {rule.methods} {rule}")
     app.run(debug=True, port=5000)

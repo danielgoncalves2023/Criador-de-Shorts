@@ -213,7 +213,7 @@ def listar_shorts(video_id):
     try:
         video_salvo = persistencia.obter_video_por_id(video_id)
         if not video_salvo:
-            return jsonify({'success': False, 'error': 'Vídeo não encontrado'}), 404
+            return jsonify({'success': False, 'error': 'Vídeo   trado'}), 404
 
         shorts_baixados = video_salvo.get('shorts_baixados', [])
         

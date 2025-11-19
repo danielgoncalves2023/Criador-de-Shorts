@@ -2,6 +2,8 @@
 Rotas de Análise - Utiliza Ollama para analisar transcrições e gerar sugestões de shorts
 """
 
+print("[DEBUG] >>> Carregando módulo analise.py <<<")
+
 from flask import Blueprint, request, jsonify
 import ollama
 import os
@@ -56,9 +58,21 @@ Gere entre 3 e 8 sugestões de shorts potenciais. Foque em momentos com:
 - Ensino claro e direto
 """
 
-@analise_bp.route('/analise/gerar-sugestoes', methods=['POST'])
+@analise_bp.route('/analise/sugestoes', methods=['POST'])
 def gerar_sugestoes():
     """Analisa a transcrição e gera sugestões de shorts usando Ollama"""
+    
+    # Responde ao preflight do CORS (SEM espaço extra antes do #)
+    if request.method == 'OPTIONS':
+        print("[ANALISE] Respondendo ao preflight OPTIONS")
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response, 200
+    
+    print(f"\n[ANALISE] POST recebido - video_id: {request.json.get('video_id')}")
+    
     try:
         data = request.json
         video_id = data.get('video_id')
@@ -66,9 +80,11 @@ def gerar_sugestoes():
         transcricao_texto = data.get('transcricao_texto')
         reprocessar = bool(data.get('reprocessar'))
 
+        print("Recebido request para /sugestoes com video_id:", video_id, "url:", url, "reprocessar:", reprocessar)
         if not video_id and not url:
             return jsonify({'success': False, 'error': 'ID do vídeo ou URL não fornecidos'}), 400
 
+        print("Obtendo dados do vídeo...")
         # Obtém dados do vídeo
         if url:
             video_salvo = persistencia.obter_video(url)
@@ -82,6 +98,7 @@ def gerar_sugestoes():
         if not video_salvo:
             return jsonify({'success': False, 'error': 'Vídeo não encontrado'}), 404
 
+        print("Verificando análise salva...")
         # Verifica se já existe análise salva
         if not reprocessar and 'analise' in video_salvo and video_salvo['analise'].get('sugestoes'):
             return jsonify({
@@ -91,6 +108,7 @@ def gerar_sugestoes():
                 'cache': True
             })
 
+        print("Preparando transcrição...")
         # Obtém transcrição
         if not transcricao_texto:
             if 'transcricao' in video_salvo:
@@ -110,6 +128,7 @@ def gerar_sugestoes():
         # Prepara prompt
         prompt = PROMPT_ANALISE.format(transcricao=transcricao_texto)
 
+        print("Chamando Ollama para análise...")
         # Chama Ollama
         try:
             # Usa o modelo llama3.2:3b (versão 3B do llama3.2)
@@ -135,6 +154,7 @@ def gerar_sugestoes():
                 linhas = conteudo.split('\n')
                 conteudo = '\n'.join(linhas[1:-1]) if len(linhas) > 2 else conteudo
             
+            print("Resposta da IA:", conteudo)
             # Tenta parsear JSON
             try:
                 resultado = json.loads(conteudo)
@@ -180,6 +200,7 @@ def gerar_sugestoes():
                     'error': 'Nenhuma sugestão válida foi gerada'
                 }), 500
 
+            print("Sugestões geradas com sucesso.")
             # Salva análise
             analise_data = {
                 'sugestoes': sugestoes_validas,
@@ -203,7 +224,6 @@ def gerar_sugestoes():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 def _ajustar_intervalo(inicio, fim, duracao_video=None):
     """Normaliza o intervalo dentro das regras de duração."""
@@ -233,7 +253,6 @@ def _ajustar_intervalo(inicio, fim, duracao_video=None):
                 duracao = fim - inicio
 
     return inicio, fim, duracao
-
 
 @analise_bp.route('/analise/atualizar-intervalo', methods=['POST'])
 def atualizar_intervalo():

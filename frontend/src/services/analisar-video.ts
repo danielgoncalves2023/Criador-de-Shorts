@@ -28,8 +28,9 @@ interface RespostaAnalise {
 
 const analisarVideo = async (params: AnalisarVideoParams): Promise<RespostaAnalise> => {
   try {
-    const { data } = await api.post<RespostaAnalise>('/api/analise/gerar-sugestoes', params);
+    const { data } = await api.post<RespostaAnalise>('/api/analise/sugestoes', params);
     return data;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (erro: any) {
     console.error('Falha na análise:', erro);
     throw new Error(erro.response?.data?.error || 'Erro ao analisar vídeo');
