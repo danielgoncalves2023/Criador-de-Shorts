@@ -8,6 +8,7 @@ import subprocess
 import sys
 import json
 import shutil
+from urllib.parse import urlparse, parse_qs
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -22,28 +23,70 @@ from utils.persistencia import persistencia
 
 shorts_bp = Blueprint('shorts', __name__)
 
+# --- Funções Auxiliares ---
+
 def _extrair_video_id(url: str):
     """Extrai o ID do vídeo de uma URL do YouTube"""
-    from urllib.parse import urlparse, parse_qs
     try:
         parsed = urlparse(url)
         if 'youtu.be' in parsed.netloc:
             return parsed.path.lstrip('/')
         elif 'youtube.com' in parsed.netloc:
             return parse_qs(parsed.query).get("v", [None])[0]
-    except:
+    except Exception:
         pass
     return None
 
+def _obter_comando_ytdlp():
+    """Retorna o comando base para executar o yt-dlp."""
+    if shutil.which("yt-dlp"):
+        return ["yt-dlp"]
+    if shutil.which("python"):
+        return ["python", "-m", "yt_dlp"]
+    if shutil.which("python3"):
+        return ["python3", "-m", "yt_dlp"]
+    return None
+
+
+def _ajustar_intervalo_descarga(inicio, fim, duracao_video=None):
+    """Garante que o intervalo esteja entre 40s e 3 minutos."""
+    inicio = max(0.0, float(inicio))
+    fim = max(inicio, float(fim))
+    duracao = fim - inicio
+
+    if duracao < MIN_SHORT_DURATION:
+        fim = inicio + MIN_SHORT_DURATION
+        duracao = MIN_SHORT_DURATION
+
+    if duracao > MAX_SHORT_DURATION:
+        fim = inicio + MAX_SHORT_DURATION
+        duracao = MAX_SHORT_DURATION
+
+    if duracao_video:
+        duracao_video = float(duracao_video)
+        if duracao_video < MIN_SHORT_DURATION:
+            return 0.0, float(duracao_video), float(duracao_video)
+        if fim > duracao_video:
+            fim = duracao_video
+            inicio = max(0.0, fim - duracao)
+            if fim - inicio < MIN_SHORT_DURATION:
+                inicio = max(0.0, fim - MIN_SHORT_DURATION)
+                duracao = fim - inicio
+
+    return inicio, fim, duracao
+
+
+# --- Rota Principal ---
+
 @shorts_bp.route('/shorts/baixar', methods=['POST'])
 def baixar_short():
-    """Baixa um short específico baseado nos tempos sugeridos"""
+    """Baixa um short específico baseado nos tempos sugeridos e o formata para 9:16."""
     try:
         data = request.json
         video_id = data.get('video_id')
         url = data.get('url')
-        inicio_segundos = data.get('inicio_segundos')
-        fim_segundos = data.get('fim_segundos')
+        inicio_segundos = float(data.get('inicio_segundos', 0))
+        fim_segundos = float(data.get('fim_segundos', 0))
         titulo_short = data.get('titulo', 'short')
         indice_sugestao = data.get('indice_sugestao', 0)
 
@@ -85,9 +128,9 @@ def baixar_short():
         nome_arquivo = f"{video_id}_short_{indice_sugestao}_{int(inicio_segundos)}s.mp4"
         output_path = os.path.join(SHORTS_DIR, nome_arquivo)
 
-        # Verifica se já existe
+        # Verifica se já existe (Lógica de cache omitida para brevidade)
         if os.path.exists(output_path):
-            # Atualiza lista de shorts baixados
+            # ... (Lógica de retorno de cache) ...
             shorts_baixados = video_salvo.get('shorts_baixados', [])
             short_info = {
                 'caminho_arquivo': output_path,
@@ -138,46 +181,40 @@ def baixar_short():
                     'error': f'Erro ao baixar vídeo: {resultado.stderr or resultado.stdout}'
                 }), 500
 
-        # Corta o vídeo usando ffmpeg
+        # --- Comando FFmpeg para CORTE e VERTICALIZAÇÃO (9:16) com CROPPING ---
+        
+        # Redimensiona para garantir que o lado menor da nova proporção (1920) seja coberto.
+        # Depois, corta (crop) para 1080x1920, cortando as laterais excedentes.
+        vertical_filter = "scale=-2:1920,crop=1080:1920" # CORREÇÃO CRÍTICA
+        
+        print(f"[DEBUG] Aplicando filtro vertical (Cropping - Tela Cheia): {vertical_filter}")
+
         comando_cortar = [
             "ffmpeg",
             "-i", temp_path,
             "-ss", str(inicio_segundos),
             "-t", str(duracao),
-            "-c", "copy",  # Copy codec para ser mais rápido
-            "-avoid_negative_ts", "make_zero",
-            "-y",  # Sobrescreve se existir
+            "-vf", vertical_filter, 
+            "-c:v", "libx264", 
+            "-c:a", "aac",
+            "-preset", "fast",
+            "-y",
             output_path
         ]
 
-        resultado = subprocess.run(comando_cortar, capture_output=True, text=True, timeout=300)
+        resultado = subprocess.run(comando_cortar, capture_output=True, text=True, timeout=600)
         
         if resultado.returncode != 0:
-            # Tenta com re-encoding se copy não funcionar
-            comando_cortar_reencode = [
-                "ffmpeg",
-                "-i", temp_path,
-                "-ss", str(inicio_segundos),
-                "-t", str(duracao),
-                "-c:v", "libx264",
-                "-c:a", "aac",
-                "-preset", "fast",
-                "-y",
-                output_path
-            ]
-            
-            resultado = subprocess.run(comando_cortar_reencode, capture_output=True, text=True, timeout=600)
-            
-            if resultado.returncode != 0:
-                return jsonify({
-                    'success': False,
-                    'error': f'Erro ao cortar vídeo: {resultado.stderr or resultado.stdout}'
-                }), 500
+            print(f"[ERRO FFmpeg] Falha ao verticalizar o vídeo. Erro: {resultado.stderr}")
+            return jsonify({
+                'success': False,
+                'error': f'Erro ao processar vídeo para 9:16: {resultado.stderr or resultado.stdout}'
+            }), 500
 
         if not os.path.exists(output_path):
             return jsonify({'success': False, 'error': 'Arquivo de short não foi gerado.'}), 500
 
-        # Atualiza lista de shorts baixados
+        # Atualiza lista de shorts baixados (lógica mantida)
         shorts_baixados = video_salvo.get('shorts_baixados', [])
         short_info = {
             'caminho_arquivo': output_path,
@@ -207,13 +244,15 @@ def baixar_short():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# --- Rota de Listagem (mantida) ---
+
 @shorts_bp.route('/shorts/listar/<video_id>', methods=['GET'])
 def listar_shorts(video_id):
     """Lista todos os shorts baixados de um vídeo"""
     try:
         video_salvo = persistencia.obter_video_por_id(video_id)
         if not video_salvo:
-            return jsonify({'success': False, 'error': 'Vídeo   trado'}), 404
+            return jsonify({'success': False, 'error': 'Vídeo não encontrado'}), 404
 
         shorts_baixados = video_salvo.get('shorts_baixados', [])
         
@@ -232,43 +271,3 @@ def listar_shorts(video_id):
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
-def _obter_comando_ytdlp():
-    """Retorna o comando base para executar o yt-dlp."""
-    if shutil.which("yt-dlp"):
-        return ["yt-dlp"]
-    if shutil.which("python"):
-        return ["python", "-m", "yt_dlp"]
-    if shutil.which("python3"):
-        return ["python3", "-m", "yt_dlp"]
-    return None
-
-
-def _ajustar_intervalo_descarga(inicio, fim, duracao_video=None):
-    """Garante que o intervalo esteja entre 40s e 3 minutos."""
-    inicio = max(0.0, float(inicio))
-    fim = max(inicio, float(fim))
-    duracao = fim - inicio
-
-    if duracao < MIN_SHORT_DURATION:
-        fim = inicio + MIN_SHORT_DURATION
-        duracao = MIN_SHORT_DURATION
-
-    if duracao > MAX_SHORT_DURATION:
-        fim = inicio + MAX_SHORT_DURATION
-        duracao = MAX_SHORT_DURATION
-
-    if duracao_video:
-        duracao_video = float(duracao_video)
-        if duracao_video < MIN_SHORT_DURATION:
-            return 0.0, float(duracao_video), float(duracao_video)
-        if fim > duracao_video:
-            fim = duracao_video
-            inicio = max(0.0, fim - duracao)
-            if fim - inicio < MIN_SHORT_DURATION:
-                inicio = max(0.0, fim - MIN_SHORT_DURATION)
-                duracao = fim - inicio
-
-    return inicio, fim, duracao
-
