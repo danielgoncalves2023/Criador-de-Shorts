@@ -20,24 +20,24 @@ from utils.persistencia import persistencia
 
 analise_bp = Blueprint('analise', __name__)
 
-PROMPT_ANALISE = """Você é um especialista cristão em criação de vídeos virais de shorts para YouTube e TikTok.
+PROMPT_ANALISE = """Você é um especialista cristão em criação de vídeos virais de shorts para YouTube e TikTok, com profundo entendimento de comunicação emocional, reflexão bíblica e storytelling cristão.
 
-Analise a transcrição do vídeo abaixo e identifique os melhores momentos para criar shorts virais. 
+Analise a transcrição do vídeo abaixo e identifique os melhores momentos para criar shorts virais.
 
 Para cada sugestão de short, forneça:
 1. Título impactante e chamativo (máximo 60 caracteres)
-2. Descrição do momento (início e fim em segundos)
+2. Descrição clara do momento (início e fim em segundos)
 3. Por que esse momento tem potencial viral
-4. Sugestão de hook (primeira frase para prender atenção)
+4. Sugestão de hook (primeira frase extremamente forte)
 5. Tags sugeridas
 
 Transcrição do vídeo:
 {transcricao}
 
 Retorne APENAS um JSON válido com o seguinte formato:
-{{
+{
   "sugestoes": [
-    {{
+    {
       "titulo": "Título do short",
       "inicio_segundos": 120.5,
       "fim_segundos": 150.3,
@@ -46,16 +46,29 @@ Retorne APENAS um JSON válido com o seguinte formato:
       "potencial_viral": "Por que tem potencial viral",
       "hook": "Primeira frase impactante",
       "tags": ["tag1", "tag2", "tag3"]
-    }}
+    }
   ]
-}}
+}
 
-Gere entre 3 e 8 sugestões de shorts potenciais. Foque em momentos com:
+REGRAS IMPORTANTES E OBRIGATÓRIAS:
+- Gere entre 3 e 8 sugestões de shorts.
+- A duração de cada short **DEVE** variar entre 40 segundos e 3 minutos.
+- **É PROIBIDO** gerar todos os trechos com a mesma duração.
+- **NÃO** gere trechos de exatamente 40 segundos, a menos que seja inevitável.
+- Gere **variação real de duração**:
+  - Pelo menos 1 short entre **40 e 59** segundos.
+  - Pelo menos 1 short entre **60 e 119** segundos.
+  - Pelo menos 1 short entre **120 e 180** segundos.
+- Cada sugestão **precisa obrigatoriamente** ter início, meio e fim de um raciocínio.
+- Certifique-se de que os trechos escolhidos sejam suficientemente longos para transmitir a mensagem completa, evitando cortes excessivamente curtos.
+
+Foque em momentos com:
 - Emoção alta
 - Lições práticas
-- Momentos de reflexão
+- Momentos de reflexão cristã
 - Histórias impactantes
 - Ensino claro e direto
+- Trechos com mensagem forte e conclusiva
 """
 
 @analise_bp.route('/analise/sugestoes', methods=['POST'])
@@ -126,7 +139,7 @@ def gerar_sugestoes():
             }), 400
 
         # Prepara prompt
-        prompt = PROMPT_ANALISE.format(transcricao=transcricao_texto)
+        prompt = PROMPT_ANALISE.replace("{transcricao}", transcricao_texto)
 
         print("Chamando Ollama para análise...")
         # Chama Ollama

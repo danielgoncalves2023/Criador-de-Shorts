@@ -184,7 +184,7 @@ def baixar_short():
         # ------------------------------
         watermark = (
             "drawtext=text='@CortesdoReinodeDeus':"
-            "fontcolor=white@0.35:"
+            "fontcolor=white@0.45:"
             "fontsize=42:"
             "x=(w-text_w)/2:"
             "y=h-470"  # bem acima da legenda
