@@ -20,55 +20,80 @@ from utils.persistencia import persistencia
 
 analise_bp = Blueprint('analise', __name__)
 
-PROMPT_ANALISE = """Você é um especialista cristão em criação de vídeos virais de shorts para YouTube e TikTok, com profundo entendimento de comunicação emocional, reflexão bíblica e storytelling cristão.
+PROMPT_ANALISE_NOVO = """Analise profundamente a transcrição do vídeo abaixo como um especialista em comunicação cristã, storytelling emocional, corte de vídeos virais e curadoria de momentos espirituais de alto impacto.
 
-Analise a transcrição do vídeo abaixo e identifique os melhores momentos para criar shorts virais.
+A duração total do vídeo original é de **{duracao_total_video} segundos**.
 
-Para cada sugestão de short, forneça:
-1. Título impactante e chamativo (máximo 60 caracteres)
-2. Descrição clara do momento (início e fim em segundos)
-3. Por que esse momento tem potencial viral
-4. Sugestão de hook (primeira frase extremamente forte)
-5. Tags sugeridas
+Sua tarefa é identificar os **MELHORES trechos** do vídeo que podem se tornar shorts extraordinariamente fortes para YouTube, TikTok e Instagram Reels, visando o **máximo impacto viral e compartilhamento**.
+
+Para cada short, gere **TODOS** os seguintes campos, seguindo rigorosamente o formato JSON de saída:
+
+1. **Título ultra-impactante** (até 60 caracteres - use frases de gancho)
+2. **Descrição clara do momento e do contexto teológico/espiritual**
+3. **Potencial Viral Detalhado**: Por que este momento é altamente viral, abordando:
+   - **Gatilho Emocional**: Que emoção domina (Choque, Esperança, Reflexão, Confronto, etc.)
+   - **Identificação Cristã**: Como a audiência evangélica se conecta instantaneamente.
+   - **Transformação**: A promessa de mudança ou aprendizado.
+   - **Autoridade**: A força da declaração do pregador/pastor.
+   - **Chamado/Ação**: O que o espectador é levado a fazer ou pensar.
+4. **Hook Inicial Extremamente Forte** — Precisa prender a atenção nos **primeiros 1.5 segundos**. Deve ser a primeira frase do trecho.
+5. **Tags Relevantes e Específicas** (Mínimo de 8 tags, incluindo 3 em inglês, como #christian #faith #jesus)
+6. **Início e fim em segundos** (float)
+7. **Duração Real Calculada** (fim_segundos - inicio_segundos)
+
+---
+
+## ⚠️ REGRAS OBRIGATÓRIAS SOBRE AS DURAÇÕES E QUANTIDADE:
+
+- A duração de cada short **DEVE variar entre 40 e 180 segundos** (3 minutos).
+- **A variação de durações deve ser EXPLÍCITA** (Ex: 42s, 95s, 178s, 55s...). **EVITE REPETIR DURAÇÕES (40s, 40s, 40s)**.
+- Todos os trechos devem representar um raciocínio completo, com início, meio e fim (Punchline).
+- **QUANTIDADE DE SUGERIDA**: Gere **oito (8)** sugestões para um vídeo de 10 minutos. Para vídeos mais longos, aumente o número proporcionalmente (Ex: 16 para 20 min). Para vídeos mais curtos, **o número de sugestões deve ser entre 3 e 8, conforme a riqueza do conteúdo**.
+
+---
+
+## 🎯 FOCO NOS FATORES VIRAIS CRISTÃOS DE ALTO IMPACTO:
+
+- **Contraste/Confronto Imediato**: Trechos que geram tensão ou quebram uma crença comum.
+- **Narrativas de Testemunho Pessoal**: Histórias rápidas de transformação.
+- **"Efeito Tapa na Cara" Espiritual**: Verdades duras, mas necessárias, entregues com autoridade.
+- **Conclusões Bíblicas Abertas ao Debate**: Declarações que geram comentários.
+- **Frases de Efeito/Punchlines**: Onde o orador atinge o clímax da ideia em uma única frase.
+
+---
+
+## 🧠 ANÁLISE PRIORITÁRIA
+
+Dê preferência ABSOLUTA a trechos que:
+
+- Funcionam como um **conteúdo completo e fechado**, sem depender de contexto anterior.
+- Possuem **qualidade de áudio e intensidade vocal** que se destacam.
+- Convidam ao **compartilhamento instantâneo** ("Tenho que enviar isso para alguém que precisa ouvir").
+- Contenham frases de impacto tipicamente usadas em **memes ou trends virais**.
+- Geram **imediatamente** emoção, confronto ou inspiração.
+
+---
 
 Transcrição do vídeo:
 {transcricao}
 
+## FORMATO DE SAÍDA
+
 Retorne APENAS um JSON válido com o seguinte formato:
 {
-  "sugestoes": [
-    {
-      "titulo": "Título do short",
-      "inicio_segundos": 120.5,
-      "fim_segundos": 150.3,
-      "duracao_segundos": 29.8,
-      "descricao": "Descrição do momento",
-      "potencial_viral": "Por que tem potencial viral",
-      "hook": "Primeira frase impactante",
-      "tags": ["tag1", "tag2", "tag3"]
-    }
-  ]
+  "sugestoes": [
+    {
+      "titulo": "Título ultra-impactante (gancho)",
+      "inicio_segundos": 120.5,
+      "fim_segundos": 150.3,
+      "duracao_segundos": 29.8,
+      "descricao": "Descrição detalhada do momento e contexto teológico.",
+      "potencial_viral": "Análise detalhada do potencial viral (Gatilho Emocional, Transformação, Chamado).",
+      "hook": "Primeira frase de atenção, até 1.5s.",
+      "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "#christian", "#faith"]
+    }
+  ]
 }
-
-REGRAS IMPORTANTES E OBRIGATÓRIAS:
-- Gere entre 3 e 8 sugestões de shorts.
-- A duração de cada short **DEVE** variar entre 40 segundos e 3 minutos.
-- **É PROIBIDO** gerar todos os trechos com a mesma duração.
-- **NÃO** gere trechos de exatamente 40 segundos, a menos que seja inevitável.
-- Gere **variação real de duração**:
-  - Pelo menos 1 short entre **40 e 59** segundos.
-  - Pelo menos 1 short entre **60 e 119** segundos.
-  - Pelo menos 1 short entre **120 e 180** segundos.
-- Cada sugestão **precisa obrigatoriamente** ter início, meio e fim de um raciocínio.
-- Certifique-se de que os trechos escolhidos sejam suficientemente longos para transmitir a mensagem completa, evitando cortes excessivamente curtos.
-
-Foque em momentos com:
-- Emoção alta
-- Lições práticas
-- Momentos de reflexão cristã
-- Histórias impactantes
-- Ensino claro e direto
-- Trechos com mensagem forte e conclusiva
 """
 
 @analise_bp.route('/analise/sugestoes', methods=['POST'])
@@ -146,12 +171,13 @@ def gerar_sugestoes():
         try:
             # Usa o modelo llama3.2:3b (versão 3B do llama3.2)
             modelo_ollama = os.environ.get('OLLAMA_MODEL', 'llama3.2:3b')
+            print(f"Usando modelo Ollama: {modelo_ollama}")
             resposta = ollama.chat(
                 model=modelo_ollama,
                 messages=[
                     {
                         'role': 'system',
-                        'content': 'Você é um especialista em análise de conteúdo para criação de shorts virais. Sempre retorne apenas JSON válido, sem markdown ou formatação adicional.'
+                        'content': 'Você é um **engenheiro de shorts virais evangélicos** com profundo entendimento de comunicação de fé, psicologia das redes sociais e métricas de retenção. Sua missão é **maximizar o potencial de compartilhamento**. Sempre retorne **APENAS JSON válido**, sem markdown (```json). As durações das sugestões devem ser **estritamente variadas** (40s, 67s, 120s, etc.) e distribuídas entre 40 e 180 segundos. O número de sugestões deve ser **proporcional à duração total do vídeo**.'
                     },
                     {
                         'role': 'user',
