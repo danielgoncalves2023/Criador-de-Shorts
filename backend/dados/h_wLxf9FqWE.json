@@ -11,7 +11,7 @@
   },
   "video_id": "h_wLxf9FqWE",
   "url": "https://www.youtube.com/watch?v=h_wLxf9FqWE",
-  "ultima_atualizacao": "2025-11-20T13:10:27.439869",
+  "ultima_atualizacao": "2025-11-23T17:34:59.351633",
   "audio": {
     "caminho_arquivo": "C:\\Users\\danie\\Documents\\Criador de Shorts\\backend\\uploads\\audios\\h_wLxf9FqWE.mp3",
     "tamanho_bytes": 47801012
@@ -1536,22 +1536,24 @@
   "analise": {
     "sugestoes": [
       {
-        "titulo": "Mudança de Atitude para Vencer a Ansiedade",
-        "inicio_segundos": 120.5,
-        "fim_segundos": 160.5,
-        "duracao_segundos": 40,
-        "descricao": "O pastor apresentou uma mensagem poderosa sobre como mudar sua atitude para vencer a ansiedade, destacando a importância de ler a Bíblia, orar e pedir ajuda ao Deus.",
-        "potencial_viral": "Porque é relevante e impactante",
-        "hook": "\"Quem gostaria de dizer Deus, eu quero ler a Bíblia toda\"",
+        "titulo": "O Segredo da Felicidade",
+        "inicio_segundos": 626.94,
+        "fim_segundos": 676.94,
+        "duracao_segundos": 50.0,
+        "descricao": "A felicidade não é apenas ter dinheiro, mas também encontrar a paz e o contentamento em Deus. É importante não nos deixarmos levar pelas coisas do mundo.",
+        "potencial_viral": "Identificação / Medo / Esperança / Confronto",
+        "hook": "só dois, eu falei, então quais são?",
         "tags": [
-          "ansiedade",
-          "mudança de atitude",
-          "biblia",
-          "orar"
+          "#gospel",
+          "#pregação",
+          "#fé",
+          "#motivação",
+          "#shorts"
         ]
       }
     ],
     "total_sugestoes": 1,
-    "modelo_ia": "llama3.2:3b"
+    "modelo_ia": "llama3.2:3b",
+    "metodo": "chunking_v2"
   }
 }

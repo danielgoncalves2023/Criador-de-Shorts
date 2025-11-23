@@ -1,143 +1,118 @@
 """
-Rotas de Análise - Utiliza Ollama para analisar transcrições e gerar sugestões de shorts
+Rotas de Análise - Utiliza Ollama com estratégia de Chunking (Janela Deslizante)
+Focado em cortes virais evangélicos de alta retenção.
 """
 
-print("[DEBUG] >>> Carregando módulo analise.py <<<")
+print("[DEBUG] >>> Carregando módulo analise.py OTIMIZADO <<<")
 
 from flask import Blueprint, request, jsonify
 import ollama
 import os
 import sys
 import json
+import math
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MIN_SHORT_DURATION = 40  # segundos
-MAX_SHORT_DURATION = 180  # 3 minutos
+MIN_SHORT_DURATION = 50  # Aumentado para garantir conteúdo
+MAX_SHORT_DURATION = 120 # Foco em 60-90s (Sweet spot do YouTube/TikTok)
 
-# Adiciona o diretório raiz ao path para importar utils
 sys.path.insert(0, BASE_DIR)
 from utils.persistencia import persistencia
 
 analise_bp = Blueprint('analise', __name__)
 
-PROMPT_ANALISE_NOVO = """Analise profundamente a transcrição do vídeo abaixo como um especialista em comunicação cristã, storytelling emocional, corte de vídeos virais e curadoria de momentos espirituais de alto impacto.
+# Prompt focado na engenharia reversa de vídeos virais do meio Gospel
+PROMPT_ANALISE_GOSPEL = """
+Você é um editor sênior de canais cristãos virais (ex: Douglas Gonçalves, Deive Leonardo). Sua especialidade é identificar momentos de "kairós" (tempo oportuno) em pregações.
 
-A duração total do vídeo original é de **{duracao_total_video} segundos**.
+ATENÇÃO: Analise este TRECHO da pregação (não é o vídeo todo).
+Identifique APENAS os momentos onde há um pico emocional, uma revelação bíblica profunda ou uma história ilustrativa (storytelling) que funcione sozinha.
 
-Sua tarefa é identificar os **MELHORES trechos** do vídeo que podem se tornar shorts extraordinariamente fortes para YouTube, TikTok e Instagram Reels, visando o **máximo impacto viral e compartilhamento**.
+CRITÉRIOS PARA UM CORTE PERFEITO:
+1. **Início Impactante (Hook):** O trecho NÃO pode começar com "E...", "Então...", "Mas...". Deve começar com uma afirmação forte ou uma pergunta.
+2. **Meio (Retenção):** Deve haver um desenvolvimento da ideia ou uma tensão narrativa.
+3. **Fim (Punchline):** O corte deve terminar logo após uma frase de impacto ou conclusão do raciocínio. NÃO corte no meio da respiração.
 
-Para cada short, gere **TODOS** os seguintes campos, seguindo rigorosamente o formato JSON de saída:
-
-1. **Título ultra-impactante** (até 60 caracteres - use frases de gancho)
-2. **Descrição clara do momento e do contexto teológico/espiritual**
-3. **Potencial Viral Detalhado**: Por que este momento é altamente viral, abordando:
-   - **Gatilho Emocional**: Que emoção domina (Choque, Esperança, Reflexão, Confronto, etc.)
-   - **Identificação Cristã**: Como a audiência evangélica se conecta instantaneamente.
-   - **Transformação**: A promessa de mudança ou aprendizado.
-   - **Autoridade**: A força da declaração do pregador/pastor.
-   - **Chamado/Ação**: O que o espectador é levado a fazer ou pensar.
-4. **Hook Inicial Extremamente Forte** — Precisa prender a atenção nos **primeiros 1.5 segundos**. Deve ser a primeira frase do trecho.
-5. **Tags Relevantes e Específicas** (Mínimo de 8 tags, incluindo 3 em inglês, como #christian #faith #jesus)
-6. **Início e fim em segundos** (float)
-7. **Duração Real Calculada** (fim_segundos - inicio_segundos)
-
----
-
-## ⚠️ REGRAS OBRIGATÓRIAS SOBRE AS DURAÇÕES E QUANTIDADE:
-
-- A duração de cada short **DEVE variar entre 40 e 180 segundos** (3 minutos).
-- **A variação de durações deve ser EXPLÍCITA** (Ex: 42s, 95s, 178s, 55s...). **EVITE REPETIR DURAÇÕES (40s, 40s, 40s)**.
-- Todos os trechos devem representar um raciocínio completo, com início, meio e fim (Punchline).
-- **QUANTIDADE DE SUGERIDA**: Gere **oito (8)** sugestões para um vídeo de 10 minutos. Para vídeos mais longos, aumente o número proporcionalmente (Ex: 16 para 20 min). Para vídeos mais curtos, **o número de sugestões deve ser entre 3 e 8, conforme a riqueza do conteúdo**.
-
----
-
-## 🎯 FOCO NOS FATORES VIRAIS CRISTÃOS DE ALTO IMPACTO:
-
-- **Contraste/Confronto Imediato**: Trechos que geram tensão ou quebram uma crença comum.
-- **Narrativas de Testemunho Pessoal**: Histórias rápidas de transformação.
-- **"Efeito Tapa na Cara" Espiritual**: Verdades duras, mas necessárias, entregues com autoridade.
-- **Conclusões Bíblicas Abertas ao Debate**: Declarações que geram comentários.
-- **Frases de Efeito/Punchlines**: Onde o orador atinge o clímax da ideia em uma única frase.
-
----
-
-## 🧠 ANÁLISE PRIORITÁRIA
-
-Dê preferência ABSOLUTA a trechos que:
-
-- Funcionam como um **conteúdo completo e fechado**, sem depender de contexto anterior.
-- Possuem **qualidade de áudio e intensidade vocal** que se destacam.
-- Convidam ao **compartilhamento instantâneo** ("Tenho que enviar isso para alguém que precisa ouvir").
-- Contenham frases de impacto tipicamente usadas em **memes ou trends virais**.
-- Geram **imediatamente** emoção, confronto ou inspiração.
-
----
-
-Transcrição do vídeo:
-{transcricao}
-
-## FORMATO DE SAÍDA
-
-Retorne APENAS um JSON válido com o seguinte formato:
+Retorne um JSON com 2 a 3 sugestões DESTE TRECHO ESPECÍFICO:
 {
-  "sugestoes": [
-    {
-      "titulo": "Título ultra-impactante (gancho)",
-      "inicio_segundos": 120.5,
-      "fim_segundos": 150.3,
-      "duracao_segundos": 29.8,
-      "descricao": "Descrição detalhada do momento e contexto teológico.",
-      "potencial_viral": "Análise detalhada do potencial viral (Gatilho Emocional, Transformação, Chamado).",
-      "hook": "Primeira frase de atenção, até 1.5s.",
-      "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "#christian", "#faith"]
-    }
-  ]
+  "sugestoes": [
+    {
+      "titulo": "Título apelativo (ex: A Verdade que Ninguém te Conta sobre Ansiedade)",
+      "citacao_inicio": "Texto exato das primeiras 5 palavras onde começa o corte",
+      "citacao_fim": "Texto exato das últimas 5 palavras onde termina o corte",
+      "resumo": "Explicação teológica breve",
+      "gatilho_viral": "Identificação / Medo / Esperança / Confronto",
+      "score": 0 a 100 (Quão forte é esse corte?)
+    }
+  ]
 }
+
+Transcrição do TRECHO:
+{transcricao_trecho}
 """
+
+def encontrar_timestamps_por_texto(transcricao_completa_objs, texto_inicio, texto_fim):
+    """
+    Tenta localizar os segundos exatos buscando o texto dentro dos segmentos do Whisper.
+    Isso corrige a alucinação de tempo da IA.
+    """
+    inicio_sec = None
+    fim_sec = None
+    
+    # Normalização simples para busca
+    texto_inicio_norm = texto_inicio.lower().replace("...", "").strip()
+    texto_fim_norm = texto_fim.lower().replace("...", "").strip()
+    
+    # Busca Início
+    for seg in transcricao_completa_objs:
+        if texto_inicio_norm in seg['texto'].lower():
+            inicio_sec = seg['inicio']
+            break
+            
+    # Busca Fim (começando a busca de onde achou o início ou do começo)
+    start_search_index = 0
+    if inicio_sec:
+        # Otimização: buscar fim apenas após o início
+        pass 
+
+    for seg in transcricao_completa_objs:
+        if seg['inicio'] >= (inicio_sec if inicio_sec else 0):
+            if texto_fim_norm in seg['texto'].lower():
+                fim_sec = seg['fim']
+                # Se achou, paramos. Queremos o primeiro match após o início
+                break
+    
+    return inicio_sec, fim_sec
 
 @analise_bp.route('/analise/sugestoes', methods=['POST'])
 def gerar_sugestoes():
-    """Analisa a transcrição e gera sugestões de shorts usando Ollama"""
-    
-    # Responde ao preflight do CORS (SEM espaço extra antes do #)
     if request.method == 'OPTIONS':
-        print("[ANALISE] Respondendo ao preflight OPTIONS")
         response = jsonify({'status': 'ok'})
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response, 200
     
-    print(f"\n[ANALISE] POST recebido - video_id: {request.json.get('video_id')}")
+    print(f"\n[ANALISE] POST recebido")
     
     try:
         data = request.json
         video_id = data.get('video_id')
         url = data.get('url')
-        transcricao_texto = data.get('transcricao_texto')
+        transcricao_texto = data.get('transcricao_texto') # Texto corrido
         reprocessar = bool(data.get('reprocessar'))
 
-        print("Recebido request para /sugestoes com video_id:", video_id, "url:", url, "reprocessar:", reprocessar)
-        if not video_id and not url:
-            return jsonify({'success': False, 'error': 'ID do vídeo ou URL não fornecidos'}), 400
-
-        print("Obtendo dados do vídeo...")
-        # Obtém dados do vídeo
+        # Recuperação dos dados
         if url:
             video_salvo = persistencia.obter_video(url)
-            if not video_salvo:
-                return jsonify({'success': False, 'error': 'Vídeo não encontrado'}), 404
-            video_id = video_salvo.get('video_id')
+            video_id = video_salvo.get('video_id') if video_salvo else None
         else:
-            # Busca por video_id
             video_salvo = persistencia.obter_video_por_id(video_id)
 
         if not video_salvo:
             return jsonify({'success': False, 'error': 'Vídeo não encontrado'}), 404
 
-        print("Verificando análise salva...")
-        # Verifica se já existe análise salva
+        # Se já existe e não é reprocessamento, retorna cache
         if not reprocessar and 'analise' in video_salvo and video_salvo['analise'].get('sugestoes'):
             return jsonify({
                 'success': True,
@@ -146,213 +121,194 @@ def gerar_sugestoes():
                 'cache': True
             })
 
-        print("Preparando transcrição...")
-        # Obtém transcrição
-        if not transcricao_texto:
-            if 'transcricao' in video_salvo:
-                transcricao_texto = video_salvo['transcricao'].get('texto')
-            else:
-                return jsonify({
-                    'success': False, 
-                    'error': 'Transcrição não encontrada. Transcreva o áudio primeiro.'
-                }), 400
+        # Precisamos dos segmentos detalhados (com timestamp) e não só do texto corrido
+        segmentos_transcricao = video_salvo.get('transcricao', {}).get('segmentos', [])
+        if not segmentos_transcricao:
+            return jsonify({'success': False, 'error': 'Segmentos da transcrição não encontrados. Refaça a transcrição.'}), 400
 
-        if not transcricao_texto or len(transcricao_texto.strip()) < 50:
-            return jsonify({
-                'success': False, 
-                'error': 'Transcrição muito curta ou vazia'
-            }), 400
-
-        # Prepara prompt
-        prompt = PROMPT_ANALISE.replace("{transcricao}", transcricao_texto)
-
-        print("Chamando Ollama para análise...")
-        # Chama Ollama
-        try:
-            # Usa o modelo llama3.2:3b (versão 3B do llama3.2)
-            modelo_ollama = os.environ.get('OLLAMA_MODEL', 'llama3.2:3b')
-            print(f"Usando modelo Ollama: {modelo_ollama}")
-            resposta = ollama.chat(
-                model=modelo_ollama,
-                messages=[
-                    {
-                        'role': 'system',
-                        'content': 'Você é um **engenheiro de shorts virais evangélicos** com profundo entendimento de comunicação de fé, psicologia das redes sociais e métricas de retenção. Sua missão é **maximizar o potencial de compartilhamento**. Sempre retorne **APENAS JSON válido**, sem markdown (```json). As durações das sugestões devem ser **estritamente variadas** (40s, 67s, 120s, etc.) e distribuídas entre 40 e 180 segundos. O número de sugestões deve ser **proporcional à duração total do vídeo**.'
-                    },
-                    {
-                        'role': 'user',
-                        'content': prompt
-                    }
-                ]
-            )
+        # ==================================================================
+        # ESTRATÉGIA DE CHUNKING (JANELA DESLIZANTE)
+        # ==================================================================
+        
+        duracao_total = video_salvo.get('info_video', {}).get('duracao_segundos', 0)
+        
+        # Configuração dos blocos
+        TAMANHO_BLOCO_MINUTOS = 10 # Analisa de 10 em 10 minutos
+        OVERLAP_MINUTOS = 1        # Volta 1 minuto para não perder contexto
+        
+        tamanho_bloco_sec = TAMANHO_BLOCO_MINUTOS * 60
+        overlap_sec = OVERLAP_MINUTOS * 60
+        
+        cursor = 0
+        todas_sugestoes_brutas = []
+        
+        print(f"[ANALISE] Iniciando análise por blocos. Duração total: {duracao_total}s")
+        
+        modelo_ollama = os.environ.get('OLLAMA_MODEL', 'llama3.2:3b')
+        
+        while cursor < duracao_total:
+            fim_bloco = min(cursor + tamanho_bloco_sec, duracao_total)
+            print(f"[ANALISE] Processando bloco: {int(cursor)}s até {int(fim_bloco)}s")
             
-            conteudo = resposta['message']['content'].strip()
+            # Filtra segmentos do bloco atual
+            texto_bloco = ""
+            for seg in segmentos_transcricao:
+                if seg['inicio'] >= cursor and seg['fim'] <= fim_bloco:
+                    texto_bloco += f"{seg['texto']} "
             
-            # Remove markdown code blocks se existirem
-            if conteudo.startswith('```'):
-                linhas = conteudo.split('\n')
-                conteudo = '\n'.join(linhas[1:-1]) if len(linhas) > 2 else conteudo
+            if len(texto_bloco) > 200: # Só analisa se tiver conteúdo suficiente
+                prompt = PROMPT_ANALISE_GOSPEL.replace("{transcricao_trecho}", texto_bloco)
+                
+                try:
+                    resposta = ollama.chat(
+                        model=modelo_ollama,
+                        messages=[
+                            {'role': 'system', 'content': 'Você é um especialista em viralização de vídeos cristãos. Retorne APENAS JSON válido.'},
+                            {'role': 'user', 'content': prompt}
+                        ],
+                        options={'temperature': 0.7} # Criatividade controlada
+                    )
+                    
+                    conteudo = resposta['message']['content'].strip()
+                    # Limpeza básica de Markdown
+                    if conteudo.startswith('```'):
+                        conteudo = conteudo.split('\n', 1)[1].rsplit('\n', 1)[0]
+                    
+                    # Extração de JSON (robusta)
+                    import re
+                    json_match = re.search(r'\{.*\}', conteudo, re.DOTALL)
+                    if json_match:
+                        resultado = json.loads(json_match.group())
+                        sugestoes_bloco = resultado.get('sugestoes', [])
+                        
+                        # Adiciona offset temporal aproximado se a IA não devolver timestamp (fallback)
+                        for s in sugestoes_bloco:
+                            s['_bloco_inicio'] = cursor 
+                        
+                        todas_sugestoes_brutas.extend(sugestoes_bloco)
+                        print(f"   -> {len(sugestoes_bloco)} sugestões encontradas neste bloco.")
+                    
+                except Exception as e:
+                    print(f"[ERRO] Falha ao processar bloco {cursor}: {str(e)}")
             
-            print("Resposta da IA:", conteudo)
-            # Tenta parsear JSON
-            try:
-                resultado = json.loads(conteudo)
-            except json.JSONDecodeError:
-                # Tenta extrair JSON do texto
-                import re
-                json_match = re.search(r'\{.*\}', conteudo, re.DOTALL)
-                if json_match:
-                    resultado = json.loads(json_match.group())
-                else:
-                    raise ValueError("Não foi possível extrair JSON da resposta")
+            # Avança o cursor (menos o overlap)
+            cursor += (tamanho_bloco_sec - overlap_sec)
 
-            sugestoes = resultado.get('sugestoes', [])
+       # ==================================================================
+        # POS-PROCESSAMENTO E REFINAMENTO DE TEMPOS (CORRIGIDO)
+        # ==================================================================
+        print("[ANALISE] Refinando tempos e validando cortes...")
+        
+        sugestoes_finais = []
+        
+        # Ordena por score (se houver) para pegar os melhores
+        todas_sugestoes_brutas.sort(key=lambda x: x.get('score', 0), reverse=True)
+        
+        # Limita a quantidade total baseada na duração do vídeo
+        max_shorts = max(5, int(duracao_total / 300))
+        top_sugestoes = todas_sugestoes_brutas[:max_shorts]
+
+        for sug in top_sugestoes:
+            # Tenta achar o timestamp exato pelo texto citado pela IA
+            txt_ini = sug.get('citacao_inicio', '')
+            txt_fim = sug.get('citacao_fim', '')
             
-            if not sugestoes:
-                return jsonify({
-                    'success': False,
-                    'error': 'Nenhuma sugestão foi gerada pela IA'
-                }), 500
-            duracao_video = video_salvo.get('info_video', {}).get('duracao_segundos')
+            inicio_real, fim_real = encontrar_timestamps_por_texto(segmentos_transcricao, txt_ini, txt_fim)
+            
+            # CORREÇÃO AQUI: Verifica se tanto o início quanto o fim foram encontrados
+            if inicio_real is None or fim_real is None:
+                print(f"   [SKIP] Sugestão ignorada (texto não encontrado na transcrição): {sug.get('titulo')}")
+                continue
 
-            # Valida e formata sugestões
-            sugestoes_validas = []
-            for sug in sugestoes:
-                if all(k in sug for k in ['titulo', 'inicio_segundos', 'fim_segundos']):
-                    inicio = float(sug.get('inicio_segundos', 0))
-                    fim = float(sug.get('fim_segundos', 0))
-                    inicio, fim, duracao = _ajustar_intervalo(inicio, fim, duracao_video)
-                    sugestoes_validas.append({
-                        'titulo': sug.get('titulo', 'Sem título'),
-                        'inicio_segundos': inicio,
-                        'fim_segundos': fim,
-                        'duracao_segundos': duracao,
-                        'descricao': sug.get('descricao', ''),
-                        'potencial_viral': sug.get('potencial_viral', ''),
-                        'hook': sug.get('hook', ''),
-                        'tags': sug.get('tags', [])
-                    })
+            # Padding de segurança (Áudio Breathing Room)
+            inicio_real = max(0, float(inicio_real) - 1.5)
+            
+            # Garante que fim_real é float antes de somar
+            fim_real = float(fim_real)
+            fim_real = min(float(duracao_total), fim_real + 1.5)
+            
+            # Validação de Duração
+            duracao = fim_real - inicio_real
+            
+            # Se for muito curto, tentamos expandir para a próxima frase (contexto)
+            if duracao < MIN_SHORT_DURATION:
+                fim_real += (MIN_SHORT_DURATION - duracao)
+                # Garante que não passou do final do vídeo
+                fim_real = min(float(duracao_total), fim_real)
+                duracao = fim_real - inicio_real
+            
+            # Se for muito longo, cortamos
+            if duracao > MAX_SHORT_DURATION:
+                fim_real = inicio_real + MAX_SHORT_DURATION
+                duracao = MAX_SHORT_DURATION
 
-            if not sugestoes_validas:
-                return jsonify({
-                    'success': False,
-                    'error': 'Nenhuma sugestão válida foi gerada'
-                }), 500
-
-            print("Sugestões geradas com sucesso.")
-            # Salva análise
-            analise_data = {
-                'sugestoes': sugestoes_validas,
-                'total_sugestoes': len(sugestoes_validas),
-                'modelo_ia': modelo_ollama
-            }
-            persistencia.atualizar_etapa(video_id, 'analise', analise_data)
-
-            return jsonify({
-                'success': True,
-                'sugestoes': sugestoes_validas,
-                'video_id': video_id,
-                'cache': False
+            sugestoes_finais.append({
+                'titulo': sug.get('titulo', 'Short Viral'),
+                'inicio_segundos': round(inicio_real, 2),
+                'fim_segundos': round(fim_real, 2),
+                'duracao_segundos': round(duracao, 2),
+                'descricao': sug.get('resumo', ''),
+                'potencial_viral': sug.get('gatilho_viral', 'Impacto Emocional'),
+                'hook': txt_ini,
+                'tags': ["#gospel", "#pregação", "#fé", "#motivação", "#shorts"]
             })
 
-        except Exception as e:
-            return jsonify({
+        # Ordena cronologicamente para facilitar a edição
+        sugestoes_finais.sort(key=lambda x: x['inicio_segundos'])
+
+        if not sugestoes_finais:
+             return jsonify({
                 'success': False,
-                'error': f'Erro ao chamar Ollama: {str(e)}'
+                'error': 'A IA analisou os blocos mas não conseguiu extrair cortes com qualidade suficiente.'
             }), 500
 
+        analise_data = {
+            'sugestoes': sugestoes_finais,
+            'total_sugestoes': len(sugestoes_finais),
+            'modelo_ia': modelo_ollama,
+            'metodo': 'chunking_v2'
+        }
+        persistencia.atualizar_etapa(video_id, 'analise', analise_data)
+
+        return jsonify({
+            'success': True,
+            'sugestoes': sugestoes_finais,
+            'video_id': video_id,
+            'cache': False
+        })
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
-def _ajustar_intervalo(inicio, fim, duracao_video=None):
-    """Normaliza o intervalo dentro das regras de duração."""
-    inicio = max(0.0, float(inicio))
-    fim = max(inicio, float(fim))
-    duracao = fim - inicio
-
-    if duracao < MIN_SHORT_DURATION:
-        fim = inicio + MIN_SHORT_DURATION
-        duracao = MIN_SHORT_DURATION
-
-    if duracao > MAX_SHORT_DURATION:
-        fim = inicio + MAX_SHORT_DURATION
-        duracao = MAX_SHORT_DURATION
-
-    if duracao_video:
-        duracao_video = float(duracao_video)
-        if duracao_video < MIN_SHORT_DURATION:
-            raise ValueError('A duração do vídeo é menor que o mínimo exigido para shorts (40s)')
-
-        if fim > duracao_video:
-            fim = duracao_video
-            inicio = max(0.0, fim - duracao)
-            # Se ainda assim ficar menor que o mínimo (por exemplo, o vídeo termina logo depois)
-            if fim - inicio < MIN_SHORT_DURATION:
-                inicio = max(0.0, fim - MIN_SHORT_DURATION)
-                duracao = fim - inicio
-
-    return inicio, fim, duracao
 
 @analise_bp.route('/analise/atualizar-intervalo', methods=['POST'])
 def atualizar_intervalo():
-    """Atualiza o intervalo de uma sugestão específica."""
+    """Atualiza o intervalo manualmente e recalcula a duração"""
     try:
         data = request.json or {}
         video_id = data.get('video_id')
         indice = data.get('indice')
-        inicio_segundos = data.get('inicio_segundos')
-        fim_segundos = data.get('fim_segundos')
-
-        if video_id is None or indice is None:
-            return jsonify({'success': False, 'error': 'Video ID e índice são obrigatórios'}), 400
-
-        try:
-            indice = int(indice)
-        except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'Índice inválido'}), 400
-
-        if inicio_segundos is None or fim_segundos is None:
-            return jsonify({'success': False, 'error': 'Tempos de início e fim são obrigatórios'}), 400
+        inicio_segundos = float(data.get('inicio_segundos'))
+        fim_segundos = float(data.get('fim_segundos'))
 
         video_salvo = persistencia.obter_video_por_id(video_id)
         if not video_salvo:
             return jsonify({'success': False, 'error': 'Vídeo não encontrado'}), 404
 
-        analise_salva = video_salvo.get('analise', {})
-        sugestoes = analise_salva.get('sugestoes', [])
+        analise = video_salvo.get('analise', {})
+        sugestoes = analise.get('sugestoes', [])
 
-        if indice < 0 or indice >= len(sugestoes):
-            return jsonify({'success': False, 'error': 'Sugestão não encontrada'}), 404
+        if 0 <= indice < len(sugestoes):
+            sugestoes[indice]['inicio_segundos'] = inicio_segundos
+            sugestoes[indice]['fim_segundos'] = fim_segundos
+            sugestoes[indice]['duracao_segundos'] = fim_segundos - inicio_segundos
+            
+            persistencia.atualizar_etapa(video_id, 'analise', analise)
+            
+            return jsonify({'success': True, 'sugestao': sugestoes[indice]})
+        
+        return jsonify({'success': False, 'error': 'Índice inválido'}), 400
 
-        duracao_video = video_salvo.get('info_video', {}).get('duracao_segundos')
-        inicio_norm, fim_norm, duracao_norm = _ajustar_intervalo(
-            inicio_segundos,
-            fim_segundos,
-            duracao_video
-        )
-
-        sugestoes[indice] = {
-            **sugestoes[indice],
-            'inicio_segundos': inicio_norm,
-            'fim_segundos': fim_norm,
-            'duracao_segundos': duracao_norm
-        }
-
-        analise_salva['sugestoes'] = sugestoes
-        video_salvo['analise'] = analise_salva
-
-        dados_path = persistencia.obter_caminho_video(video_id)
-        with open(dados_path, 'w', encoding='utf-8') as f:
-            json.dump(video_salvo, f, ensure_ascii=False, indent=2)
-
-        return jsonify({
-            'success': True,
-            'sugestao': sugestoes[indice],
-            'indice': indice
-        })
-
-    except ValueError as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
